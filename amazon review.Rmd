@@ -34,7 +34,6 @@ I recommend that you have (prerequisites):
 
 * Familiarity with R programming
 * Familiarity with neural network and in particular, Recurrent Neural Networks (RNNs). If you are not yet familiear with RNNs, I recommend reading the RNN section which will give you quick start. For you who want to dive deep to RNN architecture please look up to [this article](https://algotech.netlify.com/blog/text-lstm/).
-* Willingness to learn, and **sabr** because we know it is not easy to quickly understand new things especially about neural networks.. :)
 
 # Text Summarization
 
@@ -133,243 +132,934 @@ Introduced for the first time in 2014 by [Google](https://arxiv.org/pdf/1409.321
 
 ## Encoder-Decoder Model
 
-In order to understand the model’s underlying logic, we will go over the below illustration:
+The most common architecture use to build Seq2Seq models is the Encoder Decoder architecture. In order to understand the architecture’s underlying logic, we will go over the below illustration:
 
 ```{r echo=FALSE, out.width="60%", eval=TRUE, fig.cap="Fig 3. Encoder-decoder sequence to sequence model"}
-knitr::include_graphics(path = "assets/encode-decode.jpeg")
+knitr::include_graphics(path = "assets/encoder-decoder.png")
 ```
 
-1. Encoder: The encoder reads the entire input sequence and encodes it into an internal representation, often a fixed-length vector called the context vector.
-2. Decoder: The decoder reads the encoded input sequence from the encoder and generates the output sequence.
+Above, a simple Seq2Seq model consists of three parts, Encoder-LSTM, Decoder-LSTM, and State also known as the context.
+
+Point to note:
+
+* Both encoder and decoder are RNN models (more often LSTM).
+* **Encoder**: The encoder reads the entire input sequence and encodes it into an internal representation, often a fixed-length vector called the context vector.
+* **Decoder**: The decoder reads the encoded input sequence from the encoder and generates the output sequence.
+* The decoder behaves a bit differently during the training and inference procedure. During the training, we use a technique call teacher forcing which helps to train the decoder faster. During inference, the input to the decoder at each time step is the output from the previous time step.
 
 > ...RNN Encoder-Decoder, consists of two recurrent neural networks (RNN) that act as an encoder and a decoder pair. The encoder maps a variable-length source sequence to a fixed-length vector, and the decoder maps the vector representation back to a variable-length target sequence [^4].
 
+```{r echo=FALSE, out.width="80%", eval=TRUE, fig.cap="Fig 4. Encoder-decoder example architecture"}
+knitr::include_graphics(path = "assets/example.png")
+```
 
-Both the encoder and the decoder submodels are trained jointly, meaning at the same time. The entire encoded input is used as context for generating each step in the output. The output sequence relies heavily on the context defined in the final output of the encoder, making it challenging for the model to deal with long sentences. In the case of long sequences, there is a high probability that the initial context has been lost by the end of the sequence. An extension of the Encoder-Decoder architecture is to provide a more expressive form of the encoded input sequence and allow the decoder to learn where to pay attention to the encoded input when generating each step of the output sequence. This extension of the architecture is called **attention** [^5].
+Now, we will understand all the above steps, taken from [this article](https://towardsdatascience.com/word-level-english-to-marathi-neural-machine-translation-using-seq2seq-encoder-decoder-lstm-model-1a913f2dc4a7). We will keep this section intuitive without going to mathematical detail. So here is the main idea of encoder architecture:
+
+```{r echo=FALSE, out.width="60%", eval=TRUE, fig.cap="Fig 5. Encoder model"}
+knitr::include_graphics(path = "assets/encoder.png")
+```
+
+The LSTM reads the data one sequence after the other. Thus if the input is a sequence of length ‘k’, we say that LSTM reads it in ‘k’ time steps. Because we have sentences with 3 words, "How",  "are",  you" the LSTM will read the sentence word by word in 3 time steps as above. The words embedding layer is a technique to represent the words ($x_i$) as a vector. There are various word embedding techniques which map (embed) a word into a fixed length vector. In this tutorial we'll use pre-trained embedding vector from [*Conceptnet Numberbatch's (CN)*](https://github.com/commonsense/conceptnet-numberbatch) similar to GloVe, but probably better.
+
+```{r echo=FALSE, out.width="60%", eval=TRUE, fig.cap="Fig 5. Decoder model"}
+knitr::include_graphics(path = "assets/decoder-explained.png")
+```
+
+Unlike the Encoder LSTM which has the same role to play in both the training phase as well as in the inference phase, the Decoder LSTM has a slightly different role to play in both of these phases. In this section we’ll try to understand how to configure the Decoder during the training phase, while in the next section we’ll understand how to use it during inference.
+
+> The most important point is that the initial states (h0, c0) of the decoder are set to the final states of the encoder. This intuitively means that the decoder is trained to start generating the output sequence depending on the information encoded by the encoder. Obviously the translated Indonesian sentence must depend on the given English sentence.
+
+In the first time step we provide the <sos> or START_ token so that the decoder starts generating the next token (the actual first word of Indonesian sentence). And after the last word in the Indonesian sentence, we make the decoder learn to predict the <eos> or _END token. This will be used as the stopping condition during the inference procedure, basically it will denote the end of the translated sentence and we will stop the inference loop (more on this later). 
+
+We use a technique called “Teacher Forcing” wherein the input at each time step is given as the actual output (and not the predicted output) from the previous time step. This helps in more faster and efficient training of the network (https://machinelearningmastery.com/teacher-forcing-for-recurrent-neural-networks/).
+
+---
+
+Inference phase, taken from [this article:](https://towardsdatascience.com/word-level-english-to-marathi-neural-machine-translation-using-seq2seq-encoder-decoder-lstm-model-1a913f2dc4a7)
+
+a. During inference, we generate one word at a time. Thus the Decoder LSTM is called in a loop, every time processing only one time step.
+b. The initial states of the decoder are set to the final states of the encoder.
+c. The initial input to the decoder is always the START_ token.
+d. At each time step, we preserve the states of the decoder and set them as initial states for the next time step.
+e. At each time step, the predicted output is fed as input in the next time step.
+f. We break the loop when the decoder predicts the END_ token.
+
+----
+
+Both the encoder and the decoder submodels are trained jointly, meaning at the same time. The entire encoded input is used as context for generating each step in the output. The output sequence relies heavily on the context defined in the final output of the encoder, making it challenging for the model to deal with long sentences. In the case of long sequences, there is a high probability that the initial context has been lost by the end of the sequence. Because it becomes difficult for the encoder to memorize the entire sequence into a fixed-sized vector and to compress all the contextual information from the sequence. As we observed that as the sequence size increases model performance starts getting degrading. An extension of the Encoder-Decoder architecture is to provide a more expressive form of the encoded input sequence and allow the decoder to learn where to pay attention to the encoded input when generating each step of the output sequence. This extension of the architecture is called **attention** [^5].
 
 > *Solution to deal with long sentences:* Bahdanau et al., 2014 and Luong et al., 2015 papers introduced and a technique called “Attention” which allows the model to focus on different parts of the input sequence at every stage of the output sequence allowing the context to be preserved from beginning to end [^9].
 
+So in this attention mechanism, taken from [this article](https://medium.com/analytics-vidhya/intuitive-understanding-of-seq2seq-model-attention-mechanism-in-deep-learning-1c1c24aace1e) give importance to specific parts of the sequence instead of the entire sequence predict that word. Basically, in the attention, we don’t throw away the intermediate from the encoder state but we utilize this to generate context vector from all states so that the decoder gives output result.
 
-# Implementing Text Summarization using Keras
+Let’s go through an example to understand how attention mechanism works:
 
-```{r}
-library(keras)
-library(data.table)
-library(textclean)
-library(magrittr)
+* Source sequence: “Which sport do you like the most?
 
-batch_size = 64  # Batch size for training.
-epochs = 100  # Number of epochs to train for.
-embedding_size = 256  # dimensionality of the encoding space.
-num_samples = 100  # Number of samples to train on.
+* Target sequence: “I love cricket”
 
-data_path = 'data/amazon-fine-food-reviews/Reviews.csv'
-review <- fread(data_path, nrows = num_samples) %>% 
-  select(Summary, Text) %>% 
-  mutate(Text = Text %>% 
-           str_remove_all(pattern = "[[:punct:]]") %>%
-           str_to_lower() %>% 
-           str_squish(),
-         Summary = Summary %>% 
-           str_to_lower()
-           )
-```
+So the idea of attention was to utilize all the contextual information from the input sequence so that we can decode our target sequence. Let’s look at the example we mention. The first word ‘I’ in the target sequence is connected to the fourth word ‘you’ in the source sequence, right? Similarly, the second-word ‘love’ in the target sequence is associated with the fifth word ‘like’ in the source sequence. As we can observe that we are paying more attention to context information like sports, like, you in the source sequence. So, instead of going through the entire sequence it pays attention to specific words from the sequence and gives out the result based on that.
+
+
+# Implementing Text Summarization using Tensorflow
+
+Since I haven't fineshed yet to translate tensorflow code to R, so the all code below I took from [teamrzaki/text_summarization_abstractive_methods](https://github.com/theamrzaki/text_summurization_abstractive_methods/blob/master/Implementation%20A%20(seq2seq%20with%20attention%20and%20feature%20rich%20representation)/Model_1.ipynb). So we'll build a model text summarization for foods review on amazon. The dataset consists of 500,000 review. 
 
 ```{r}
-head(review, 5)
+library(reticulate)
 ```
 
 
-```{r}
-## Vectorize the data.
-input_texts  <- review[[2]]
-target_texts <- review[[1]]
-input_texts  <- lapply( input_texts, function(s) strsplit(s, split=" ")[[1]])
-target_texts <- lapply( target_texts, function(s) strsplit(s, split=" ")[[1]])
-head(target_texts)
+```{python}
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+import re
+from nltk.corpus import stopwords
+import time
+from tensorflow.python.layers.core import Dense
+from tensorflow.python.ops.rnn_cell_impl import _zero_state_tensors
+print('TensorFlow Version: {}'.format(tf.__version__))
 ```
 
-```{r}
-input_characters  <- sort(unique(unlist(input_texts)))
-target_characters <- sort(unique(unlist(target_texts)))
-num_encoder_tokens <- length(input_characters)
-num_decoder_tokens <- length(target_characters)
-max_encoder_seq_length <- max(sapply(input_texts,length))
-max_decoder_seq_length <- max(sapply(target_texts,length))
+## Preparing the data
+
+```{python}
+reviews = pd.read_csv("Reviews.csv")
+reviews.head()
 ```
 
+Remove null values and unneeded features
 
-```{r}
-cat('Number of samples:', length(input_texts),'\n')
-cat('Number of unique input tokens:', num_encoder_tokens,'\n')
-cat('Number of unique output tokens:', num_decoder_tokens,'\n')
-cat('Max sequence length for inputs:', max_encoder_seq_length,'\n')
-cat('Max sequence length for outputs:', max_decoder_seq_length,'\n')
+```{python}
+
+reviews = reviews.dropna()
+reviews = reviews.drop(['Id','ProductId','UserId','ProfileName','HelpfulnessNumerator','HelpfulnessDenominator',
+                        'Score','Time'], 1)
+reviews = reviews.reset_index(drop=True)
 ```
 
-```{r}
-input_token_index  <- 1:length(input_characters)
-names(input_token_index) <- input_characters
-target_token_index <- 1:length(target_characters)
-names(target_token_index) <- target_characters
-encoder_input_data <- array(
-  0, dim = c(length(input_texts), max_encoder_seq_length, num_encoder_tokens))
-decoder_input_data <- array(
-  0, dim = c(length(input_texts), max_decoder_seq_length, num_decoder_tokens))
-decoder_target_data <- array(
-  0, dim = c(length(input_texts), max_decoder_seq_length, num_decoder_tokens))
+Inspecting some of the reviews:
 
-for(i in 1:length(input_texts)) {
-  d1 <- sapply( input_characters, function(x) { as.integer(x == input_texts[[i]]) })
-  encoder_input_data[i,1:nrow(d1),] <- d1
-  d2 <- sapply( target_characters, function(x) { as.integer(x == target_texts[[i]]) })
-  decoder_input_data[i,1:nrow(d2),] <- d2
-  d3 <- sapply( target_characters, function(x) { as.integer(x == target_texts[[i]][-1]) })
-  decoder_target_data[i,1:nrow(d3),] <- d3
+```{python}
+
+for i in range(5):
+    print("Review #",i+1)
+    print(reviews.Summary[i])
+    print(reviews.Text[i])
+    print()
+```
+
+* 2. Normalizing text data: replace the contraction with the long form.
+
+```{python}
+# A list of contractions from http://stackoverflow.com/questions/19790188/expanding-english-language-contractions-in-python
+contractions = { 
+"ain't": "am not",
+"aren't": "are not",
+"can't": "cannot",
+"can't've": "cannot have",
+"'cause": "because",
+"could've": "could have",
+"couldn't": "could not",
+"couldn't've": "could not have",
+"didn't": "did not",
+"doesn't": "does not",
+"don't": "do not",
+"hadn't": "had not",
+"hadn't've": "had not have",
+"hasn't": "has not",
+"haven't": "have not",
+"he'd": "he would",
+"he'd've": "he would have",
+"he'll": "he will",
+"he's": "he is",
+"how'd": "how did",
+"how'll": "how will",
+"how's": "how is",
+"i'd": "i would",
+"i'll": "i will",
+"i'm": "i am",
+"i've": "i have",
+"isn't": "is not",
+"it'd": "it would",
+"it'll": "it will",
+"it's": "it is",
+"let's": "let us",
+"ma'am": "madam",
+"mayn't": "may not",
+"might've": "might have",
+"mightn't": "might not",
+"must've": "must have",
+"mustn't": "must not",
+"needn't": "need not",
+"oughtn't": "ought not",
+"shan't": "shall not",
+"sha'n't": "shall not",
+"she'd": "she would",
+"she'll": "she will",
+"she's": "she is",
+"should've": "should have",
+"shouldn't": "should not",
+"that'd": "that would",
+"that's": "that is",
+"there'd": "there had",
+"there's": "there is",
+"they'd": "they would",
+"they'll": "they will",
+"they're": "they are",
+"they've": "they have",
+"wasn't": "was not",
+"we'd": "we would",
+"we'll": "we will",
+"we're": "we are",
+"we've": "we have",
+"weren't": "were not",
+"what'll": "what will",
+"what're": "what are",
+"what's": "what is",
+"what've": "what have",
+"where'd": "where did",
+"where's": "where is",
+"who'll": "who will",
+"who's": "who is",
+"won't": "will not",
+"wouldn't": "would not",
+"you'd": "you would",
+"you'll": "you will",
+"you're": "you are"
 }
-dim(d1)
-dim(d2)
 ```
 
-## Create the model
+* 3. Remove unnecessary character and stopwords
 
-```{r}
-## Define an input sequence and process it.
-encoder_inputs  <- layer_input(shape=list(NULL,num_encoder_tokens))
-encoder         <- layer_lstm(units=latent_dim, return_state=TRUE)
-encoder_results <- encoder_inputs %>% encoder
-## We discard `encoder_outputs` and only keep the states.
-encoder_states  <- encoder_results[2:3]
+We will remove the stopwords from the texts because they do not provide much use for training our model. However, we will keep them for our summaries so that they sound more like natural phrases.
 
-## Set up the decoder, using `encoder_states` as initial state.
-decoder_inputs  <- layer_input(shape=list(NULL, num_decoder_tokens))
-## We set up our decoder to return full output sequences,
-## and to return internal states as well. We don't use the
-## return states in the training model, but we will use them in inference.
-decoder_lstm    <- layer_lstm(units=latent_dim, return_sequences=TRUE,
-                              return_state=TRUE, stateful=FALSE)
-decoder_results <- decoder_lstm(decoder_inputs, initial_state=encoder_states)
-decoder_dense   <- layer_dense(units=num_decoder_tokens, activation='softmax')
-decoder_outputs <- decoder_dense(decoder_results[[1]])
+```{python}
+def clean_text(text, remove_stopwords = True):
+    '''Remove unwanted characters, stopwords, and format the text to create fewer nulls word embeddings'''
+    
+    # Convert words to lower case
+    text = text.lower()
+    
+    # Replace contractions with their longer forms 
+    if True:
+        text = text.split()
+        new_text = []
+        for word in text:
+            if word in contractions:
+                new_text.append(contractions[word])
+            else:
+                new_text.append(word)
+        text = " ".join(new_text)
+    
+    # Format words and remove unwanted characters
+    text = re.sub(r'https?:\/\/.*[\r\n]*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\<a href', ' ', text)
+    text = re.sub(r'&amp;', '', text) 
+    text = re.sub(r'[_"\-;%()|+&=*%.,!?:#$@\[\]/]', ' ', text)
+    text = re.sub(r'<br />', ' ', text)
+    text = re.sub(r'\'', ' ', text)
+    
+    # Optionally, remove stop words
+    if remove_stopwords:
+        text = text.split()
+        stops = set(stopwords.words("english"))
+        text = [w for w in text if not w in stops]
+        text = " ".join(text)
+
+    return text
 ```
 
-```{r, eval=FALSE}
-## Define the model that will turn
-## `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
-model <- keras_model( inputs = list(encoder_inputs, decoder_inputs),
-                      outputs = decoder_outputs )
-
-## Compile model
-model %>% compile(optimizer='rmsprop', loss='categorical_crossentropy')
-
-## Run model
-model %>% fit( list(encoder_input_data, decoder_input_data), decoder_target_data,
-               batch_size=batch_size,
-               epochs=10,
-               validation_split=0.2)
-
-## Save model
-save_model_hdf5(model,'rev.h5')
-save_model_weights_hdf5(model,'rev-wt.h5')
-```
-
-```{r}
-model <- load_model_hdf5('rev.h5')
-load_model_weights_hdf5(model,'rev-wt.h5')
-```
-
-
-## Sampling
-
-```{r}
-## Here's the drill:
-## 1) encode input and retrieve initial decoder state
-## 2) run one step of decoder with this initial state
-## and a "start of sequence" token as target.
-## Output will be the next target token
-## 3) Repeat with the current target token and current states
-
-## Define sampling models
-encoder_model <-  keras_model(encoder_inputs, encoder_states)
-decoder_state_input_h <- layer_input(shape=latent_dim)
-decoder_state_input_c <- layer_input(shape=latent_dim)
-decoder_states_inputs <- c(decoder_state_input_h, decoder_state_input_c)
-decoder_results <- decoder_lstm(decoder_inputs, initial_state=decoder_states_inputs)
-decoder_states  <- decoder_results[2:3]
-decoder_outputs <- decoder_dense(decoder_results[[1]])
-decoder_model   <- keras_model(
-  inputs  = c(decoder_inputs, decoder_states_inputs),
-  outputs = c(decoder_outputs, decoder_states))
-
-## Reverse-lookup token index to decode sequences back to
-## something readable.
-reverse_input_char_index  <- as.character(input_characters)
-reverse_target_char_index <- as.character(target_characters)
-
-decode_sequence <- function(input_seq) {
-  ## Encode the input as state vectors.
-  states_value <- predict(encoder_model, input_seq)
+```{python}
+import nltk
+nltk.download('stopwords')
   
-  ## Generate empty target sequence of length 1.
-  target_seq <- array(0, dim=c(1, 1, num_decoder_tokens))
-  ## Populate the first character of target sequence with the start character.
-  target_seq[1, 1, target_token_index['\t']] <- 1.
-  
-  ## Sampling loop for a batch of sequences
-  ## (to simplify, here we assume a batch of size 1).
-  stop_condition = FALSE
-  decoded_sentence = ' '
-  maxiter = max_decoder_seq_length
-  niter = 1
-  while (!stop_condition && niter < maxiter) {
-    
-    ## output_tokens, h, c = decoder_model.predict([target_seq] + states_value)
-    decoder_predict <- predict(decoder_model, c(list(target_seq), states_value))
-    output_tokens <- decoder_predict[[1]]
-    
-    ## Sample a token
-    sampled_token_index <- which.max(output_tokens[1, 1, ])
-    sampled_char <- reverse_target_char_index[sampled_token_index]
-    decoded_sentence <-  paste0(decoded_sentence, sampled_char)
-    decoded_sentence
-    
-    ## Exit condition: either hit max length
-    ## or find stop character.
-    if (sampled_char == '\n' ||
-        length(decoded_sentence) > max_decoder_seq_length) {
-      stop_condition = TRUE
-    }
-    
-    ## Update the target sequence (of length 1).
-    ## target_seq = np.zeros((1, 1, num_decoder_tokens))
-    target_seq[1, 1, ] <- 0
-    target_seq[1, 1, sampled_token_index] <- 1.
-    
-    ## Update states
-    h <- decoder_predict[[2]]
-    c <- decoder_predict[[3]]
-    states_value = list(h, c)
-    niter <- niter + 1
-  }    
-  return(decoded_sentence)
-}
+# Clean the summaries and texts
+clean_summaries = []
+for summary in reviews.Summary:
+    clean_summaries.append(clean_text(summary, remove_stopwords=False))
+print("Summaries are complete.")
 
-for (seq_index in 1:5) {
-  ## Take one sequence (part of the training test)
-  ## for trying out decoding.
-  input_seq = encoder_input_data[seq_index,,,drop=FALSE]
-  decoded_sentence = decode_sequence(input_seq)
-  target_sentence <- gsub("\t|\n"," ",paste(target_texts[[seq_index]],collapse=' '))
-  input_sentence  <- paste(input_texts[[seq_index]],collapse=' ')
-  cat('-\n')
-  cat('Input sentence  : ', input_sentence,'\n')
-  cat('Target sentence : ', target_sentence,'\n')
-  cat('Decoded sentence: ', decoded_sentence,'\n')
-}
+clean_texts = []
+for text in reviews.Text:
+    clean_texts.append(clean_text(text))
+print("Texts are complete.")
+```
+
+Inspect the cleaned summaries and texts to ensure they have been cleaned well:
+
+```{python}
+
+for i in range(5):
+    print("Clean Review #",i+1)
+    print(clean_summaries[i])
+    print(clean_texts[i])
+    print()
+```
+
+```{python}
+def count_words(count_dict, text):
+    '''Count the number of occurrences of each word in a set of text'''
+    for sentence in text:
+        for word in sentence.split():
+            if word not in count_dict:
+                count_dict[word] = 1
+            else:
+                count_dict[word] += 1
+```
+
+Find the number of times each word was used and the size of the vocabulary. 
+
+```{python}
+word_counts = {}
+
+count_words(word_counts, clean_summaries)
+count_words(word_counts, clean_texts)
+            
+print("Size of Vocabulary:", len(word_counts))
+```
+
+Load word embedding model from *Conceptnet Numberbatch's (CN)*, similar to GloVe, but probably better:
+
+```{python}
+embeddings_index = {}
+with open('numberbatch-en.txt', encoding='utf-8') as f:
+    for line in f:
+        values = line.split(' ')
+        word = values[0]
+        embedding = np.asarray(values[1:], dtype='float32')
+        embeddings_index[word] = embedding
+
+print('Word embeddings:', len(embeddings_index))
+```
+
+Find the number of words that are missing from CN, and are used more than our threshold.
+
+```{python}
+missing_words = 0
+threshold = 20
+
+for word, count in word_counts.items():
+    if count > threshold:
+        if word not in embeddings_index:
+            missing_words += 1
+            
+missing_ratio = round(missing_words/len(word_counts),4)*100
+            
+print("Number of words missing from CN:", missing_words)
+print("Percent of words that are missing from vocabulary: {}%".format(missing_ratio))
+```
+
+Find the number of words that are missing from CN, and are used more than our threshold.
+
+```{python}
+missing_words = 0
+threshold = 20
+
+for word, count in word_counts.items():
+    if count > threshold:
+        if word not in embeddings_index:
+            missing_words += 1
+            
+missing_ratio = round(missing_words/len(word_counts),4)*100
+            
+print("Number of words missing from CN:", missing_words)
+print("Percent of words that are missing from vocabulary: {}%".format(missing_ratio))
+```
+
+Total number of unique words: 132884
+Number of words we will use: 60433
+Percent of words we will use: 45.48%
+
+Need to use 300 for embedding dimensions to match CN's vectors.
+
+```{python}
+embedding_dim = 300
+nb_words = len(vocab_to_int)
+
+# Create matrix with default values of zero
+word_embedding_matrix = np.zeros((nb_words, embedding_dim), dtype=np.float32)
+for word, i in vocab_to_int.items():
+    if word in embeddings_index:
+        word_embedding_matrix[i] = embeddings_index[word]
+    else:
+        # If word not in CN, create a random embedding for it
+        new_embedding = np.array(np.random.uniform(-1.0, 1.0, embedding_dim))
+        embeddings_index[word] = new_embedding
+        word_embedding_matrix[i] = new_embedding
+
+# Check if value matches len(vocab_to_int)
+print(len(word_embedding_matrix))
+```
+
+```{python}
+def convert_to_ints(text, word_count, unk_count, eos=False):
+    '''Convert words in text to an integer.
+       If word is not in vocab_to_int, use UNK's integer.
+       Total the number of words and UNKs.
+       Add EOS token to the end of texts'''
+    ints = []
+    for sentence in text:
+        sentence_ints = []
+        for word in sentence.split():
+            word_count += 1
+            if word in vocab_to_int:
+                sentence_ints.append(vocab_to_int[word])
+            else:
+                sentence_ints.append(vocab_to_int["<UNK>"])
+                unk_count += 1
+        if eos:
+            sentence_ints.append(vocab_to_int["<EOS>"])
+        ints.append(sentence_ints)
+    return ints, word_count, unk_count
+```
+
+Apply `convert_to_ints` to `clean_summaries` and `clean_texts`
+
+```{python}
+
+word_count = 0
+unk_count = 0
+
+int_summaries, word_count, unk_count = convert_to_ints(clean_summaries, word_count, unk_count)
+int_texts, word_count, unk_count = convert_to_ints(clean_texts, word_count, unk_count, eos=True)
+
+unk_percent = round(unk_count/word_count,4)*100
+
+print("Total number of words in headlines:", word_count)
+print("Total number of UNKs in headlines:", unk_count)
+print("Percent of words that are UNK: {}%".format(unk_percent))
+```
+
+```{python}
+def create_lengths(text):
+    '''Create a data frame of the sentence lengths from a text'''
+    lengths = []
+    for sentence in text:
+        lengths.append(len(sentence))
+    return pd.DataFrame(lengths, columns=['counts'])
+```
+
+```{python}
+lengths_summaries = create_lengths(int_summaries)
+lengths_texts = create_lengths(int_texts)
+
+print("Summaries:")
+print(lengths_summaries.describe())
+print()
+print("Texts:")
+print(lengths_texts.describe())
+```
+
+Summaries:
+              counts
+count  568411.000000
+mean        4.181624
+std         2.657872
+min         0.000000
+25%         2.000000
+50%         4.000000
+75%         5.000000
+max        48.000000
+
+Texts:
+              counts
+count  568411.000000
+mean       41.996835
+std        42.520873
+min         1.000000
+25%        18.000000
+50%        29.000000
+75%        50.000000
+max      2085.000000
+
+create a function to remove document review that include to many unknown (UNKs) word.
+
+```{python}
+def unk_counter(sentence):
+    '''Counts the number of time UNK appears in a sentence.'''
+    unk_count = 0
+    for word in sentence:
+        if word == vocab_to_int["<UNK>"]:
+            unk_count += 1
+    return unk_count
+```
+
+```{python}
+sorted_summaries = []
+sorted_texts = []
+max_text_length = 84
+max_summary_length = 13
+min_length = 2
+unk_text_limit = 1
+unk_summary_limit = 0
+
+for length in range(min(lengths_texts.counts), max_text_length): 
+    for count, words in enumerate(int_summaries):
+        if (len(int_summaries[count]) >= min_length and
+            len(int_summaries[count]) <= max_summary_length and
+            len(int_texts[count]) >= min_length and
+            unk_counter(int_summaries[count]) <= unk_summary_limit and
+            unk_counter(int_texts[count]) <= unk_text_limit and
+            length == len(int_texts[count])
+           ):
+            sorted_summaries.append(int_summaries[count])
+            sorted_texts.append(int_texts[count])
+        
+# Compare lengths to ensure they match
+print(len(sorted_summaries))
+print(len(sorted_texts))
+```
+
+## Building the Model
+
+```{python}
+def model_inputs():
+    '''Create palceholders for inputs to the model'''
+    
+    input_data = tf.placeholder(tf.int32, [None, None], name='input')
+    targets = tf.placeholder(tf.int32, [None, None], name='targets')
+    lr = tf.placeholder(tf.float32, name='learning_rate')
+    keep_prob = tf.placeholder(tf.float32, name='keep_prob')
+    summary_length = tf.placeholder(tf.int32, (None,), name='summary_length')
+    max_summary_length = tf.reduce_max(summary_length, name='max_dec_len')
+    text_length = tf.placeholder(tf.int32, (None,), name='text_length')
+
+    return input_data, targets, lr, keep_prob, summary_length, max_summary_length, text_length
+```
+
+```{python}
+def process_encoding_input(target_data, vocab_to_int, batch_size):
+    '''Remove the last word id from each batch and concat the <GO> to the begining of each batch'''
+    
+    ending = tf.strided_slice(target_data, [0, 0], [batch_size, -1], [1, 1])
+    dec_input = tf.concat([tf.fill([batch_size, 1], vocab_to_int['<GO>']), ending], 1)
+
+    return dec_input
+```
+
+```{python}
+def encoding_layer(rnn_size, sequence_length, num_layers, rnn_inputs, keep_prob):
+    '''Create the encoding layer'''
+    
+    for layer in range(num_layers):
+        with tf.variable_scope('encoder_{}'.format(layer)):
+            cell_fw = tf.contrib.rnn.LSTMCell(rnn_size,
+                                              initializer=tf.random_uniform_initializer(-0.1, 0.1, seed=2))
+            cell_fw = tf.contrib.rnn.DropoutWrapper(cell_fw, 
+                                                    input_keep_prob = keep_prob)
+
+            cell_bw = tf.contrib.rnn.LSTMCell(rnn_size,
+                                              initializer=tf.random_uniform_initializer(-0.1, 0.1, seed=2))
+            cell_bw = tf.contrib.rnn.DropoutWrapper(cell_bw, 
+                                                    input_keep_prob = keep_prob)
+
+            enc_output, enc_state = tf.nn.bidirectional_dynamic_rnn(cell_fw, 
+                                                                    cell_bw, 
+                                                                    rnn_inputs,
+                                                                    sequence_length,
+                                                                    dtype=tf.float32)
+    # Join outputs since we are using a bidirectional RNN
+    enc_output = tf.concat(enc_output,2)
+    
+    return enc_output, enc_state
+```
+
+
+```{python}
+def training_decoding_layer(dec_embed_input, summary_length, dec_cell, initial_state, output_layer, 
+                            vocab_size, max_summary_length):
+    '''Create the training logits'''
+    
+    training_helper = tf.contrib.seq2seq.TrainingHelper(inputs=dec_embed_input,
+                                                        sequence_length=summary_length,
+                                                        time_major=False)
+
+    training_decoder = tf.contrib.seq2seq.BasicDecoder(dec_cell,
+                                                       training_helper,
+                                                       initial_state,
+                                                       output_layer) 
+
+    training_logits, _ , _ = tf.contrib.seq2seq.dynamic_decode(training_decoder,
+                                                           output_time_major=False,
+                                                           impute_finished=True,
+                                                           maximum_iterations=max_summary_length)
+    return training_decoder
+```
+
+```{python}
+
+def inference_decoding_layer(embeddings, start_token, end_token, dec_cell, initial_state, output_layer,
+                             max_summary_length, batch_size):
+    '''Create the inference logits'''
+    
+    start_tokens = tf.tile(tf.constant([start_token], dtype=tf.int32), [batch_size], name='start_tokens')
+    
+    inference_helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embeddings,
+                                                                start_tokens,
+                                                                end_token)
+                
+    inference_decoder = tf.contrib.seq2seq.BasicDecoder(dec_cell,
+                                                        inference_helper,
+                                                        initial_state,
+                                                        output_layer)
+                
+    inference_logits, _ , _ = tf.contrib.seq2seq.dynamic_decode(inference_decoder,
+                                                            output_time_major=False,
+                                                            impute_finished=True,
+                                                            maximum_iterations=max_summary_length)
+    
+    return inference_decoder
+```
+
+```{python}
+def decoding_layer(dec_embed_input, embeddings, enc_output, enc_state, vocab_size, text_length, summary_length, 
+                   max_summary_length, rnn_size, vocab_to_int, keep_prob, batch_size, num_layers):
+    '''Create the decoding cell and attention for the training and inference decoding layers'''
+    
+    for layer in range(num_layers):
+        with tf.variable_scope('decoder_{}'.format(layer)):
+            lstm = tf.contrib.rnn.LSTMCell(rnn_size,
+                                           initializer=tf.random_uniform_initializer(-0.1, 0.1, seed=2))
+            dec_cell = tf.contrib.rnn.DropoutWrapper(lstm, 
+                                                     input_keep_prob = keep_prob)
+    
+    output_layer = Dense(vocab_size,
+                         kernel_initializer = tf.truncated_normal_initializer(mean = 0.0, stddev=0.1))
+    
+    attn_mech = tf.contrib.seq2seq.BahdanauAttention(rnn_size,
+                                                  enc_output,
+                                                  text_length,
+                                                  normalize=False,
+                                                  name='BahdanauAttention')
+
+    dec_cell = tf.contrib.seq2seq.AttentionWrapper(dec_cell,
+                                                          attn_mech,
+                                                          rnn_size)
+            
+    #initial_state = tf.contrib.seq2seq.AttentionWrapperState(enc_state[0],
+    #                                                                _zero_state_tensors(rnn_size, 
+    #                                                                                    batch_size, 
+    #                                                                                    tf.float32)) 
+    initial_state = dec_cell.zero_state(batch_size=batch_size,dtype=tf.float32).clone(cell_state=enc_state[0])
+
+    with tf.variable_scope("decode"):
+        training_decoder = training_decoding_layer(dec_embed_input, 
+                                                  summary_length, 
+                                                  dec_cell, 
+                                                  initial_state,
+                                                  output_layer,
+                                                  vocab_size, 
+                                                  max_summary_length)
+        
+        training_logits,_ ,_ = tf.contrib.seq2seq.dynamic_decode(training_decoder,
+                                  output_time_major=False,
+                                  impute_finished=True,
+                                  maximum_iterations=max_summary_length)
+    with tf.variable_scope("decode", reuse=True):
+        inference_decoder = inference_decoding_layer(embeddings,  
+                                                    vocab_to_int['<GO>'], 
+                                                    vocab_to_int['<EOS>'],
+                                                    dec_cell, 
+                                                    initial_state, 
+                                                    output_layer,
+                                                    max_summary_length,
+                                                    batch_size)
+        
+        inference_logits,_ ,_ = tf.contrib.seq2seq.dynamic_decode(inference_decoder,
+                                  output_time_major=False,
+                                  impute_finished=True,
+                                  maximum_iterations=max_summary_length)
+
+    return training_logits, inference_logits
+```
+
+```{python}
+def seq2seq_model(input_data, target_data, keep_prob, text_length, summary_length, max_summary_length, 
+                  vocab_size, rnn_size, num_layers, vocab_to_int, batch_size):
+    '''Use the previous functions to create the training and inference logits'''
+    
+    # Use Numberbatch's embeddings and the newly created ones as our embeddings
+    embeddings = word_embedding_matrix
+    
+    enc_embed_input = tf.nn.embedding_lookup(embeddings, input_data)
+    enc_output, enc_state = encoding_layer(rnn_size, text_length, num_layers, enc_embed_input, keep_prob)
+    
+    dec_input = process_encoding_input(target_data, vocab_to_int, batch_size)
+    dec_embed_input = tf.nn.embedding_lookup(embeddings, dec_input)
+    
+    training_logits, inference_logits  = decoding_layer(dec_embed_input, 
+                                                        embeddings,
+                                                        enc_output,
+                                                        enc_state, 
+                                                        vocab_size, 
+                                                        text_length, 
+                                                        summary_length, 
+                                                        max_summary_length,
+                                                        rnn_size, 
+                                                        vocab_to_int, 
+                                                        keep_prob, 
+                                                        batch_size,
+                                                        num_layers)
+    
+    return training_logits, inference_logits
+```
+
+```{python}
+def pad_sentence_batch(sentence_batch):
+    """Pad sentences with <PAD> so that each sentence of a batch has the same length"""
+    max_sentence = max([len(sentence) for sentence in sentence_batch])
+    return [sentence + [vocab_to_int['<PAD>']] * (max_sentence - len(sentence)) for sentence in sentence_batch]
+```
+
+```{python}
+def get_batches(summaries, texts, batch_size):
+    """Batch summaries, texts, and the lengths of their sentences together"""
+    for batch_i in range(0, len(texts)//batch_size):
+        start_i = batch_i * batch_size
+        summaries_batch = summaries[start_i:start_i + batch_size]
+        texts_batch = texts[start_i:start_i + batch_size]
+        pad_summaries_batch = np.array(pad_sentence_batch(summaries_batch))
+        pad_texts_batch = np.array(pad_sentence_batch(texts_batch))
+        
+        # Need the lengths for the _lengths parameters
+        pad_summaries_lengths = []
+        for summary in pad_summaries_batch:
+            pad_summaries_lengths.append(len(summary))
+        
+        pad_texts_lengths = []
+        for text in pad_texts_batch:
+            pad_texts_lengths.append(len(text))
+        
+        yield pad_summaries_batch, pad_texts_batch, pad_summaries_lengths, pad_texts_lengths
+```
+
+Setup hyperparameters:
+
+```{python}
+epochs = 100
+batch_size = 64
+rnn_size = 256
+num_layers = 2
+learning_rate = 0.005
+keep_probability = 0.75
+```
+
+```{python}
+# Build the graph
+train_graph = tf.Graph()
+# Set the graph to default to ensure that it is ready for training
+with train_graph.as_default():
+    
+    # Load the model inputs    
+    input_data, targets, lr, keep_prob, summary_length, max_summary_length, text_length = model_inputs()
+
+    # Create the training and inference logits
+    training_logits, inference_logits = seq2seq_model(tf.reverse(input_data, [-1]),
+                                                      targets, 
+                                                      keep_prob,   
+                                                      text_length,
+                                                      summary_length,
+                                                      max_summary_length,
+                                                      len(vocab_to_int)+1,
+                                                      rnn_size, 
+                                                      num_layers, 
+                                                      vocab_to_int,
+                                                      batch_size)
+    
+    # Create tensors for the training logits and inference logits
+    training_logits = tf.identity(training_logits.rnn_output, 'logits')
+    inference_logits = tf.identity(inference_logits.sample_id, name='predictions')
+    
+    # Create the weights for sequence_loss
+    masks = tf.sequence_mask(summary_length, max_summary_length, dtype=tf.float32, name='masks')
+
+    with tf.name_scope("optimization"):
+        # Loss function
+        cost = tf.contrib.seq2seq.sequence_loss(
+            training_logits,
+            targets,
+            masks)
+
+        # Optimizer
+        optimizer = tf.train.AdamOptimizer(learning_rate)
+
+        # Gradient Clipping
+        gradients = optimizer.compute_gradients(cost)
+        capped_gradients = [(tf.clip_by_value(grad, -5., 5.), var) for grad, var in gradients if grad is not None]
+        train_op = optimizer.apply_gradients(capped_gradients)
+print("Graph is built.")
 
 ```
 
-# Evaluating Summaries
+## Training the Model
+
+Subset the data for training:
+
+```{python}
+
+start = 200000
+end = start + 300000
+sorted_summaries_short = sorted_summaries[start:end]
+sorted_texts_short = sorted_texts[start:end]
+print("The shortest text length:", len(sorted_texts_short[0]))
+print("The longest text length:",len(sorted_texts_short[-1]))
+```
+
+
+
+```{python}
+# Train the Model
+learning_rate_decay = 0.95
+min_learning_rate = 0.0005
+display_step = 20 # Check training loss after every 20 batches
+stop_early = 0 
+stop = 6 #3 # If the update loss does not decrease in 3 consecutive update checks, stop training
+per_epoch = 3 # Make 3 update checks per epoch
+update_check = (len(sorted_texts_short)//batch_size//per_epoch)-1
+
+update_loss = 0 
+batch_loss = 0
+summary_update_loss = [] # Record the update losses for saving improvements in the model
+
+  
+tf.reset_default_graph()
+checkpoint = "drive/Colab Notebooks/Menu/Model 300/best_model.ckpt"  #300k sentence
+with tf.Session(graph=train_graph) as sess:
+    sess.run(tf.global_variables_initializer())
+    
+    # If we want to continue training a previous session
+    # loader = tf.train.import_meta_graph(checkpoint + '.meta')
+    # loader.restore(sess, checkpoint)
+    #sess.run(tf.local_variables_initializer())
+
+    for epoch_i in range(1, epochs+1):
+        update_loss = 0
+        batch_loss = 0
+        for batch_i, (summaries_batch, texts_batch, summaries_lengths, texts_lengths) in enumerate(
+                get_batches(sorted_summaries_short, sorted_texts_short, batch_size)):
+            start_time = time.time()
+            _, loss = sess.run(
+                [train_op, cost],
+                {input_data: texts_batch,
+                 targets: summaries_batch,
+                 lr: learning_rate,
+                 summary_length: summaries_lengths,
+                 text_length: texts_lengths,
+                 keep_prob: keep_probability})
+
+            batch_loss += loss
+            update_loss += loss
+            end_time = time.time()
+            batch_time = end_time - start_time
+
+            if batch_i % display_step == 0 and batch_i > 0:
+                print('Epoch {:>3}/{} Batch {:>4}/{} - Loss: {:>6.3f}, Seconds: {:>4.2f}'
+                      .format(epoch_i,
+                              epochs, 
+                              batch_i, 
+                              len(sorted_texts_short) // batch_size, 
+                              batch_loss / display_step, 
+                              batch_time*display_step))
+                batch_loss = 0
+                
+                #saver = tf.train.Saver() 
+                #saver.save(sess, checkpoint)
+                
+            if batch_i % update_check == 0 and batch_i > 0:
+                print("Average loss for this update:", round(update_loss/update_check,3))
+                summary_update_loss.append(update_loss)
+                
+              
+                  
+                # If the update loss is at a new minimum, save the model
+                if update_loss <= min(summary_update_loss):
+                    print('New Record!') 
+                    stop_early = 0
+                    saver = tf.train.Saver() 
+                    saver.save(sess, checkpoint)
+
+                else:
+                    print("No Improvement.")
+                    stop_early += 1
+                    if stop_early == stop:
+                        break
+                update_loss = 0
+            
+                    
+        # Reduce learning rate, but not below its minimum value
+        learning_rate *= learning_rate_decay
+        if learning_rate < min_learning_rate:
+            learning_rate = min_learning_rate
+        
+        if stop_early == stop:
+            print("Stopping Training.")
+            break
+```
+
+## Making our own summaries
+
+To see the quality of the summaries that this model can generate, you can either create your own review, or use a review from the dataset. You can set the length of the summary to a fixed value, or use a random value like I have here.
+
+```{python}
+def text_to_seq(text):
+    '''Prepare the text for the model'''
+    
+    text = clean_text(text)
+    return [vocab_to_int.get(word, vocab_to_int['<UNK>']) for word in text.split()]
+
+```
+
+```{python}
+random = np.random.randint(0,len(clean_texts))
+input_sentence = clean_texts[random]
+text = text_to_seq(clean_texts[random])
+
+checkpoint = "drive/Colab Notebooks/Menu/Model 300/best_model.ckpt"
+
+loaded_graph = tf.Graph()
+with tf.Session(graph=loaded_graph) as sess:
+    # Load saved model
+    loader = tf.train.import_meta_graph(checkpoint + '.meta')
+    loader.restore(sess, checkpoint)
+
+    input_data = loaded_graph.get_tensor_by_name('input:0')
+    logits = loaded_graph.get_tensor_by_name('predictions:0')
+    text_length = loaded_graph.get_tensor_by_name('text_length:0')
+    summary_length = loaded_graph.get_tensor_by_name('summary_length:0')
+    keep_prob = loaded_graph.get_tensor_by_name('keep_prob:0')
+    
+    #Multiply by batch_size to match the model's input parameters
+    answer_logits = sess.run(logits, {input_data: [text]*batch_size, 
+                                      summary_length: [np.random.randint(5,8)], 
+                                      text_length: [len(text)]*batch_size,
+                                      keep_prob: 1.0})[0] 
+
+# Remove the padding from the tweet
+pad = vocab_to_int["<PAD>"] 
+
+print('Original Text:', reviews.Text[random])
+print('Original summary:', reviews.Summary[random])#clean_summaries[random]
+
+print('\nText')
+print('  Word Ids:    {}'.format([i for i in text]))
+print('  Input Words: {}'.format(" ".join([int_to_vocab[i] for i in text])))
+
+print('\nSummary')
+print('  Word Ids:       {}'.format([i for i in answer_logits if i != pad]))
+print('  Response Words: {}'.format(" ".join([int_to_vocab[i] for i in answer_logits if i != pad])))
+
+```
+
+* Original Text: This is not only a fabulous tea, but I don't get bored with it.<br />The flavor is interesting and robust enough to keep my attention, but not so intense that it's overwhelming.<br />If you generally like rooibos tea but want it with something extra this is a good choice.<br />They somehow managed to put in the perfect amount of lemon: not so much that it's predominant, but not so little that it's undiscernible.
+
+* Original summary: Really delicious
+
+* generate summary: my favorite tea
+
+
+## Evaluating Summaries
 
 There are two common metrics for evaluation text summarization result, *bilingual Evaluation Understudy Score* (BLEU) and *Recall-Oriented Understudy for Gisting Evaluation* (ROUGH).
 
@@ -388,9 +1078,6 @@ We can use the BLEU score for other language generation problems such as:
 * Image caption generation.
 * Machine translation.
 * Speech recognition.
-
-## Rouge
-
 
 
 # References
@@ -412,3 +1099,7 @@ We can use the BLEU score for other language generation problems such as:
 [^8] Papineni, K., *et al* (2002) [BLEU: a Method for Automatic Evaluation of Machine Translation](https://www.aclweb.org/anthology/P02-1040.pdf)
 
 [^9] Dugar, Pranay. (2019) [Attention - Seq2Seq Models](https://towardsdatascience.com/day-1-2-attention-seq2seq-models-65df3f49e263)
+
+[^10] Lamba, Harshall. (2019) [Word Level English to Marathi Neural Machine Translation using Encoder-Decoder Model](https://towardsdatascience.com/word-level-english-to-marathi-neural-machine-translation-using-seq2seq-encoder-decoder-lstm-model-1a913f2dc4a7)
+
+[^11] Jangid, A. (2019) [Intuitive Understanding of Seq2seq model & Attention Mechanism in Deep Learning](https://medium.com/analytics-vidhya/intuitive-understanding-of-seq2seq-model-attention-mechanism-in-deep-learning-1c1c24aace1e)
