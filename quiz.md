@@ -10,13 +10,12 @@
     - [ ] Output gate
     - [ ] Hidden gate
     - [ ] Input gate
-4.  We can't use a reguler LSTM network to map a fixed-length input with a fixed length output where the length of input and output may differ. This is why sequence to sequence model is used to address the problem like that. Suppose you build an encoder-decoder model for machine translation.
 
 ![](assets/encode-decode.jpeg)
 
-This model is a "conditional language model" in the sense that the encoder portion (show in green) is modeling the probability of the input sentence of x. Is it the statement is correct?
-    - [ ] TRUE
-    - [ ] FALSE
+4.  We can't use a reguler LSTM network to map a fixed-length input with a fixed length output where the length of input and output may differ. This is why sequence to sequence model is used to address the problem like that. Suppose you build an encoder-decoder model for machine translation (refer to the image above). This model is a "conditional language model" in the sense that the encoder portion (show in green) is modeling the probability of the input sentence of x. Is it the statement is correct?
+    - [ ] TRUE, the encoder reads the entire input sequence and encodes it into the context vector.
+    - [ ] FALSE, because the step to generate the output sequence is on decoder model.
 
 5. Compare to the encoder-decoder model shown in question number 4 (which does not use an attention mechanism), we expect the attention model to have the greatest advantage when:
    - [ ] The input sequence length, is large.
