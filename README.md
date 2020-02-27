@@ -12,7 +12,6 @@ I recommend that you have (prerequisites):
 
 * Familiarity with R programming
 * Familiarity with neural network and in particular, Recurrent Neural Networks (RNNs). If you are not yet familiear with RNNs, I recommend reading the RNN section which will give you quick start. For you who want to dive deep to RNN architecture please look up to [this article](https://algotech.netlify.com/blog/text-lstm/).
-* Willingness to learn, and **sabr** because we know it is not easy to quickly understand new things especially about neural networks.. :)
 
 # Dataset
 
