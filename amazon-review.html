@@ -3755,6 +3755,11 @@ Fig 5. Decoder model
 <li>Machine translation.</li>
 <li>Speech recognition.</li>
 </ul>
+<div class="sourceCode" id="cb37"><pre class="sourceCode python"><code class="sourceCode python"><a class="sourceLine" id="cb37-1" title="1"><span class="im">from</span> nltk.translate.bleu_score <span class="im">import</span> sentence_bleu</a>
+<a class="sourceLine" id="cb37-2" title="2">reference <span class="op">=</span> [[<span class="st">&#39;So&#39;</span>, <span class="st">&#39;easy&#39;</span>, <span class="st">&#39;so&#39;</span>, <span class="st">&#39;good&#39;</span>,<span class="st">&#39;and&#39;</span>,<span class="st">&#39;all&#39;</span>,<span class="st">&#39;natural&#39;</span>]]</a>
+<a class="sourceLine" id="cb37-3" title="3">summary_gen <span class="op">=</span> [<span class="st">&#39;great&#39;</span>, <span class="st">&#39;hot&#39;</span>, <span class="st">&#39;snack&#39;</span>]</a>
+<a class="sourceLine" id="cb37-4" title="4">score <span class="op">=</span> sentence_bleu(reference, summary_gen)</a>
+<a class="sourceLine" id="cb37-5" title="5"><span class="bu">print</span>(score)</a></code></pre></div>
 </div>
 </div>
 <div id="references" class="section level1">

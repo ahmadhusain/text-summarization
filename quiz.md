@@ -21,3 +21,8 @@ This model is a "conditional language model" in the sense that the encoder porti
 5. Compare to the encoder-decoder model shown in question number 4 (which does not use an attention mechanism), we expect the attention model to have the greatest advantage when:
    - [ ] The input sequence length, is large.
    - [ ] The input sequence length, is small.
+
+6. When working with text data, the first thing we must do come up with a strategy to convert string to number or to vectorize the text before feeding it to the model. word embedding is one of the way to do vectorizing text data. Suppose you develop a pre-trained model word embedding which has been trained on huge of corpus of text. Why pre-trained word embedding useful for sequence to sequence model?
+   - [ ] effect of language similarity
+   - [ ] effect of training data size
+   - [ ] effect of learning process

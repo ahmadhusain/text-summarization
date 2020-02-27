@@ -1079,6 +1079,14 @@ We can use the BLEU score for other language generation problems such as:
 * Machine translation.
 * Speech recognition.
 
+```{python}
+from nltk.translate.bleu_score import sentence_bleu
+reference = [['So', 'easy', 'so', 'good','and','all','natural']]
+summary_gen = ['great', 'hot', 'snack']
+score = sentence_bleu(reference, summary_gen)
+print(score)
+```
+
 
 # References
 
